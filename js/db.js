@@ -12,6 +12,18 @@ const errMsg = e => {
   return m;
 };
 
+/* Ağ kesintisinde (okul Wi-Fi'ı) RPC'yi birkaç kez yeniden dene; mantık hataları hemen döner */
+async function rpcRetry(fn, args, tries = 3){
+  let last;
+  for (let i = 0; i < tries; i++){
+    let r;
+    try { r = await client().rpc(fn, args); } catch (e) { r = { error: e }; } // sorgu nesnesi yalnız thenable, .catch yok
+    if (!r.error || !/fetch|network|Failed|timeout/i.test(r.error.message || String(r.error))) return r;
+    last = r; await new Promise(res => setTimeout(res, 500 * (i + 1)));
+  }
+  return last;
+}
+
 /* ———————— CANLI (Supabase) ———————— */
 function Live(){
   let S = null; // {id, pin, token}
@@ -36,7 +48,7 @@ function Live(){
     mode: 'live',
     get session(){ return S; },
     async create(title){
-      const { data, error } = await client().rpc('yq_create', { p_title: title, p_quiz: QUIZ.id });
+      const { data, error } = await rpcRetry('yq_create', { p_title: title, p_quiz: QUIZ.id });
       if (error) throw new Error(errMsg(error));
       const r = data[0]; S = { id: r.session_id, pin: r.pin, token: r.host_token };
       Y.store.set('yara_host', S);
@@ -51,12 +63,12 @@ function Live(){
     },
     async host(patch){
       if (!S) return;
-      const { error } = await client().rpc('yq_host', { p_session: S.id, p_token: S.token, p });
+      const { error } = await rpcRetry('yq_host', { p_session: S.id, p_token: S.token, p: patch });
       if (error) throw new Error(errMsg(error));
     },
     async scores(rows){
       if (!S) return;
-      const { error } = await client().rpc('yq_host_scores', { p_session: S.id, p_token: S.token, p_rows: rows });
+      const { error } = await rpcRetry('yq_host_scores', { p_session: S.id, p_token: S.token, p_rows: rows });
       if (error) throw new Error(errMsg(error));
     },
     on(type, fn){ cb[type].push(fn); },
@@ -129,7 +141,7 @@ function Demo(n = 28){
 }
 
 window.DB = {
-  hasLive, client, errMsg, loadByPin, AVATARS,
+  hasLive, client, errMsg, loadByPin, AVATARS, rpcRetry,
   make(demo){ return demo || !hasLive ? Demo() : Live(); }
 };
 window.DemoBots = Demo;

@@ -130,7 +130,7 @@ function question(){
     const choice = +b.dataset.i;
     lockUI(choice); vibrate(35);
     myAnswer[qi] = choice; hist[qi] = { ...(hist[qi] || {}), choice, topic: S.q_topic }; Y.store.set('yara_hist_' + me.pin, hist);
-    const { data, error } = await c.rpc('yq_answer', { p_player: me.id, p_secret: me.secret, p_q: qi, p_choice: choice });
+    const { data, error } = await DB.rpcRetry('yq_answer', { p_player: me.id, p_secret: me.secret, p_q: qi, p_choice: choice });
     const msg = app.querySelector('.lockmsg');
     if (error) { msg.textContent = DB.errMsg(error); msg.style.color = 'var(--red)'; delete hist[qi].choice; return; }
     hist[qi].ms = data; Y.store.set('yara_hist_' + me.pin, hist);
